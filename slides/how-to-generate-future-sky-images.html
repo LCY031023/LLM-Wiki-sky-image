@@ -1,0 +1,2016 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>如何生成未來天空影像？——從基礎認知到前沿生成式模型</title>
+  <!-- Google Fonts: Inter, Noto Sans TC, JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- KaTeX for LaTeX Math -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+
+  <style>
+    :root {
+      /* ========================================================
+         純淨藍色系統一設計系統 (Strict Blue-Based Unified System)
+         ======================================================== */
+      
+      /* 舒緩護眼淺天藍底色 */
+      --bg-page: #d4e3f0;             /* 全局外圍背景 */
+      --bg-viewport: #eef6fd;         /* 簡報主畫布底色（柔和清爽） */
+      --viewport-border: #bcd5ea;
+
+      /* 統一純白卡片 + 淺藍邊框 */
+      --card-bg: #ffffff;
+      --card-border: #c4d9ed;
+      --card-shadow: 0 4px 18px rgba(10, 35, 71, 0.05);
+      --card-hover-border: #7cb8e8;
+      --card-hover-shadow: 0 8px 24px rgba(2, 132, 199, 0.12);
+
+      /* 高對比易讀深藍文字 */
+      --text-primary: #0a2347;        /* 主標題與深色重點 */
+      --text-secondary: #223f66;      /* 正文與通俗解說 */
+      --text-muted: #57759d;          /* 次級註解與補充標註 */
+
+      /* 藍色主題色與技術徽章 */
+      --sky-primary: #0284c7;         /* 活力天藍 */
+      --sky-dark: #0369a1;            /* 深海軍藍 */
+      --sky-soft-bg: #e2f1fd;         /* 徽章淡藍背景 */
+      --sky-border: #9ecdf5;          /* 徽章邊框藍 */
+
+      /* 克制之暖琥珀黃（僅用於關鍵數字里程碑） */
+      --gold-accent: #d97706;
+      --gold-soft-bg: #fef7e6;
+      --gold-border: #fcd777;
+
+      /* 標準間距與字體系統 */
+      --pad-viewport: 32px 72px;
+      --pad-card: 22px 26px;          /* 卡片內邊距：確保文字離邊框有充裕呼吸空間 */
+      
+      --font-sans: 'Inter', 'Noto Sans TC', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      
+      --slide-width: 1260px;
+      --slide-height: 720px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      background-image: 
+        radial-gradient(circle at 10% 12%, rgba(2, 132, 199, 0.10) 0%, transparent 45%),
+        radial-gradient(circle at 90% 88%, rgba(3, 105, 161, 0.08) 0%, transparent 45%);
+    }
+
+    /* 頂部固定控制條 */
+    .deck-topbar {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 40px);
+      max-width: 1260px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+      padding: 6px 14px;
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--viewport-border);
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(10, 35, 71, 0.05);
+      font-size: 14px;
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      color: var(--sky-dark);
+      letter-spacing: 0.5px;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .topbar-btn {
+      background: var(--sky-soft-bg);
+      border: 1px solid var(--sky-border);
+      color: var(--sky-primary);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: var(--font-sans);
+    }
+
+    .topbar-btn:hover {
+      background: var(--sky-primary);
+      color: #ffffff;
+      border-color: var(--sky-primary);
+    }
+
+    /* 投影片主容器 (固定比例 16:9) */
+    .viewport-wrapper {
+      position: relative;
+      width: var(--slide-width);
+      height: var(--slide-height);
+      box-shadow: 0 16px 40px rgba(10, 35, 71, 0.12);
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1.5px solid var(--viewport-border);
+      background-color: var(--bg-viewport);
+      transform-origin: center center;
+    }
+
+    /* 左右兩側懸浮翻頁箭頭按鈕 */
+    .nav-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1.5px solid var(--viewport-border);
+      color: var(--sky-primary);
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(10, 35, 71, 0.15);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 50;
+      user-select: none;
+    }
+
+    .nav-arrow:hover {
+      background: var(--sky-primary);
+      color: #ffffff;
+      border-color: var(--sky-primary);
+      transform: translateY(-50%) scale(1.1);
+      box-shadow: 0 6px 20px rgba(2, 132, 199, 0.3);
+    }
+
+    .nav-arrow-left {
+      left: 10px;
+    }
+
+    .nav-arrow-right {
+      right: 10px;
+    }
+
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      padding: var(--pad-viewport);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-sizing: border-box;
+      z-index: 1;
+    }
+
+    .slide.active {
+      opacity: 1;
+      pointer-events: auto;
+      z-index: 2;
+    }
+
+    /* 頁首標準區塊 */
+    .slide-header {
+      margin-bottom: 16px;
+      flex-shrink: 0;
+    }
+
+    .slide-category-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--sky-primary);
+      background: var(--sky-soft-bg);
+      border: 1px solid var(--sky-border);
+      padding: 4px 12px;
+      border-radius: 6px;
+      margin-bottom: 6px;
+    }
+
+    .slide-title {
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--text-primary);
+      line-height: 1.25;
+      letter-spacing: -0.3px;
+      margin-bottom: 4px;
+    }
+
+    .slide-subtitle {
+      font-size: 18.5px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      font-weight: 500;
+    }
+
+    /* 投影片主體彈性內容區 */
+    .slide-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 0;
+      gap: 14px;
+    }
+
+    /* 頁尾資訊列 */
+    .slide-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--card-border);
+      padding-top: 10px;
+      margin-top: 10px;
+      flex-shrink: 0;
+    }
+
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 500;
+    }
+
+    .footer-right {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: var(--sky-primary);
+    }
+
+    /* 統一卡片系統 */
+    .card {
+      background: var(--card-bg);
+      border: 1.5px solid var(--card-border);
+      border-radius: 14px;
+      padding: var(--pad-card);
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      transition: all 0.25s ease;
+      position: relative;
+    }
+
+    .card:hover {
+      border-color: var(--card-hover-border);
+      box-shadow: var(--card-hover-shadow);
+    }
+
+    .card-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      width: fit-content;
+      margin-bottom: 10px;
+      background: var(--sky-soft-bg);
+      color: var(--sky-primary);
+      border: 1px solid var(--sky-border);
+    }
+
+    .card-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      line-height: 1.3;
+    }
+
+    .card-desc {
+      font-size: 17px;
+      color: var(--text-secondary);
+      line-height: 1.55;
+      margin-bottom: 10px;
+    }
+
+    .card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: auto;
+      padding-top: 8px;
+      border-top: 1px dashed var(--card-border);
+    }
+
+    .tag-item {
+      font-size: 12.5px;
+      font-family: var(--font-mono);
+      color: var(--sky-dark);
+      background: #f1f8fe;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid #d0e4f7;
+    }
+
+    /* 格線佈局集合 */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      height: 100%;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      height: 100%;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      height: 100%;
+    }
+
+    .grid-5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      height: 100%;
+    }
+
+    /* 生動比喻框 / 核心概念框 */
+    .analogy-box {
+      background: #f0f7fe;
+      border: 1px solid #cce3f8;
+      border-radius: 8px;
+      padding: 11px 16px;
+      margin-bottom: 10px;
+    }
+
+    .analogy-label {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--sky-dark);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .analogy-text {
+      font-size: 14.5px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* 醒目標註提示橫條 */
+    .callout-strip {
+      background: #ffffff;
+      border: 1.5px solid var(--card-border);
+      border-left: 5px solid var(--sky-primary);
+      border-radius: 10px;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: 0 2px 8px rgba(10, 35, 71, 0.04);
+      flex-shrink: 0;
+    }
+
+    .callout-text {
+      font-size: 15.5px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.45;
+    }
+
+    .callout-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--sky-primary);
+      background: var(--sky-soft-bg);
+      border: 1px solid var(--sky-border);
+      padding: 3px 9px;
+      border-radius: 4px;
+      margin-right: 8px;
+      white-space: nowrap;
+    }
+
+    /* 文獻引用超連結標籤（乾淨緊湊防斷行） */
+    .cite-link {
+      display: inline-flex;
+      align-items: center;
+      color: var(--sky-primary);
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      font-weight: 700;
+      text-decoration: none;
+      background: #eaf4fd;
+      border: 1px solid #b8daf8;
+      border-radius: 4px;
+      padding: 1px 6px;
+      margin-left: 3px;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      vertical-align: baseline;
+    }
+
+    .cite-link:hover {
+      background: var(--sky-primary);
+      color: #ffffff;
+      border-color: var(--sky-primary);
+    }
+
+    /* 關鍵數據指標盒 (Flex 橫排，白字防跳行) */
+    .metric-box {
+      background: #ffffff;
+      border: 1.5px solid var(--card-border);
+      border-radius: 12px;
+      padding: 14px 26px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      box-shadow: 0 2px 10px rgba(10, 35, 71, 0.04);
+      flex-shrink: 0;
+    }
+
+    .metric-left {
+      font-size: 17px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      font-weight: 500;
+    }
+
+    .metric-left strong {
+      color: var(--text-primary);
+      font-weight: 700;
+    }
+
+    .metric-val-wrap {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .metric-val {
+      font-family: var(--font-mono);
+      font-size: 38px;
+      font-weight: 800;
+      color: var(--gold-accent);
+      line-height: 1;
+      letter-spacing: -0.5px;
+    }
+
+    /* 備用數學公式塊樣式 */
+    .math-block {
+      text-align: center;
+      margin: 8px 0;
+      font-family: var(--font-mono);
+      font-size: 18.5px;
+      color: var(--sky-dark);
+      font-weight: 700;
+      background: #f0f7fe;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1.5px solid #cce3f8;
+      line-height: 1.4;
+    }
+
+    /* 表格樣式 (Slide 11 · 留白充裕、邊框呼吸間距優化) */
+    .eval-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: #ffffff;
+      border: 1.5px solid var(--card-border);
+      border-radius: 12px;
+      overflow: hidden;
+      font-size: 14px;
+      box-shadow: var(--card-shadow);
+    }
+
+    .eval-table th {
+      background: #eef6fd;
+      color: var(--text-primary);
+      font-weight: 700;
+      text-align: left;
+      padding: 13px 20px;
+      border-bottom: 1.5px solid var(--card-border);
+      font-size: 14.5px;
+    }
+
+    .eval-table td {
+      padding: 12px 20px;
+      border-bottom: 1px solid #e1ecf6;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      vertical-align: middle;
+      font-size: 13.5px;
+    }
+
+    /* 關鍵：第一欄與最後一欄給予充裕的邊框留白，杜絕文字緊貼邊緣 */
+    .eval-table th:first-child,
+    .eval-table td:first-child {
+      padding-left: 26px;
+    }
+
+    .eval-table th:last-child,
+    .eval-table td:last-child {
+      padding-right: 26px;
+    }
+
+    .eval-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .eval-table tr:hover td {
+      background-color: #f7fbfe;
+    }
+
+    .ref-content {
+      font-size: 14.5px;
+      line-height: 1.4;
+      color: var(--text-secondary);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+    }
+
+    .ref-title {
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .ref-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .ref-meta strong {
+      color: var(--sky-dark);
+      font-weight: 600;
+    }
+
+    /* 總覽導航跳轉覆蓋層 (Press G or O) */
+    .overview-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(10, 35, 71, 0.7);
+      backdrop-filter: blur(6px);
+      z-index: 1000;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      padding: 30px;
+    }
+
+    .overview-modal.active {
+      display: flex;
+    }
+
+    .overview-content {
+      background: #eef6fd;
+      border: 1.5px solid var(--viewport-border);
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 1100px;
+      max-height: 85vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+    }
+
+    .overview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1.5px solid var(--card-border);
+      padding-bottom: 12px;
+    }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .overview-thumb {
+      background: #ffffff;
+      border: 1.5px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .overview-thumb:hover {
+      border-color: var(--sky-primary);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 14px rgba(2, 132, 199, 0.15);
+    }
+
+    .overview-thumb-num {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--sky-primary);
+    }
+
+    .overview-thumb-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.35;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 頂部快速控制列 -->
+  <div class="deck-topbar">
+    <div class="topbar-left">
+      <span>LLM-WIKI 概念導覽</span>
+      <span style="color: var(--text-muted); font-weight: 400;">|</span>
+      <span style="color: var(--text-primary); font-weight: 600;">如何讓 AI 預測未來的天空？</span>
+    </div>
+    <div class="topbar-right">
+      <button class="topbar-btn" onclick="prevSlide()" title="上一頁 (Left / PageUp)">[ 上一頁 ]</button>
+      <span id="slideIndicator" style="font-family: var(--font-mono); font-weight: 700; color: var(--sky-primary);">01 / 13</span>
+      <button class="topbar-btn" onclick="nextSlide()" title="下一頁 (Right / PageDown / Space)">[ 下一頁 ]</button>
+      <button class="topbar-btn" onclick="toggleOverview()" title="快速總覽 (G / O)">[ 總覽 (G) ]</button>
+      <button class="topbar-btn" onclick="toggleFullscreen()" title="全螢幕 (F)">[ 全螢幕 (F) ]</button>
+    </div>
+  </div>
+
+  <!-- 簡報視窗本體 -->
+  <div class="viewport-wrapper" id="viewport">
+    <!-- 兩側懸浮翻頁箭頭按鈕 -->
+    <button class="nav-arrow nav-arrow-left" onclick="prevSlide()" title="上一頁 (← / PageUp)">&#x2039;</button>
+    <button class="nav-arrow nav-arrow-right" onclick="nextSlide()" title="下一頁 (→ / Space / Enter)">&#x203A;</button>
+
+    <!-- ==========================================
+         SLIDE 01: 封面 (通俗親切，直擊問題)
+         ========================================== -->
+    <div class="slide active" id="slide-1">
+      <div class="slide-header" style="margin-top: 10px;">
+        <div class="slide-category-tag">[前沿技術導覽 · 通俗易懂版]</div>
+        <h1 class="slide-title" style="font-size: 42px; margin-bottom: 8px;">如何讓 AI 預測未來的天空？</h1>
+        <div class="slide-subtitle" style="font-size: 20px; color: var(--sky-dark); font-weight: 600;">
+          全天空攝影機視訊預報與生成式大氣模擬 (2024–2026 前沿技術剖析)
+        </div>
+      </div>
+
+      <div class="slide-body">
+        <div class="grid-2">
+          <!-- 輸入欄 -->
+          <div class="card" style="justify-content: center;">
+            <div class="card-badge">[問題起點 · 我們給 AI 看什麼？]</div>
+            <div class="card-title">一段過去幾分鐘的天空縮時錄影</div>
+            <div class="card-desc">
+              架設在地面的全天空相機（仰角 180°），每隔 1 分鐘拍攝一張天穹全景照片。我們將過去 5 到 15 分鐘連續拍攝的照片輸入給 AI。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">生活化比喻：</div>
+              <div class="analogy-text">
+                就像給 AI 看了 10 秒鐘的「天空縮時短片」，讓它看清目前天上有幾朵雲、正往哪裡飄、太陽正掛在哪個位置。
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#地面仰望視角</span>
+              <span class="tag-item">#每分鐘連續拍照</span>
+              <span class="tag-item">#180度天穹</span>
+            </div>
+          </div>
+
+          <!-- 目標欄 -->
+          <div class="card" style="justify-content: center;">
+            <div class="card-badge">[任務目標 · 我們要 AI 做什麼？]</div>
+            <div class="card-title">自主畫出未來 30 分鐘的天空連續視訊</div>
+            <div class="card-desc">
+              AI 必須預測雲朵隨風飄移的軌跡、受熱蒸發或遇冷凝聚的變形過程，生成一段未來 0 至 30 分鐘高畫質、清晰連貫的天空影片。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">核心挑戰：</div>
+              <div class="analogy-text">
+                雲是流體，隨時都在變形和生長消散！AI 生成的未來畫面不能只是粗糙的模糊塗抹，必須連每一朵雲的輪廓都清晰逼真。
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#未來0-30分鐘</span>
+              <span class="tag-item">#流暢視訊生成</span>
+              <span class="tag-item">#清晰雲層輪廓</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="footer-left">
+          <span>LLM-Wiki 知識庫精心提煉</span>
+          <span>•</span>
+          <span>基於國際同儕審查文獻 [1–7] 之核心技術</span>
+        </div>
+        <div class="footer-right">01 / 13</div>
+      </div>
+    </div>
+
+
+    <!-- ==========================================
+         SLIDE 02: 基礎入門：什麼是全天空攝影機？
+         ========================================== -->
+    <div class="slide" id="slide-2">
+      <div class="slide-header">
+        <div class="slide-category-tag">[基礎概念 · 為什麼做這件事？]</div>
+        <h2 class="slide-title">全天空攝影機（ASI）與視訊預報任務</h2>
+        <div class="slide-subtitle">
+          什麼是全天空影像？為什麼要對未來的天空進行「連續動態畫面生成」？
+        </div>
+      </div>
+
+      <div class="slide-body">
+        <div class="grid-3">
+          <!-- 卡片 1 -->
+          <div class="card">
+            <div class="card-badge">[觀測設備]</div>
+            <div class="card-title">地面上的 180° 天眼</div>
+            <div class="card-desc">
+              <strong>全天空攝影機（ASI）</strong>是固定架在地面、鏡頭垂直朝天的特製相機。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">視覺特徵：</div>
+              <div class="analogy-text">
+                透過超廣角魚眼鏡頭，照片呈現正圓形天穹。中間是正上方（天頂），圓周邊緣是地平線，一眼望穿整個天空。
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#魚眼鏡頭</span>
+              <span class="tag-item">#天頂到地平線</span>
+            </div>
+          </div>
+
+          <!-- 卡片 2 -->
+          <div class="card">
+            <div class="card-badge">[預測任務]</div>
+            <div class="card-title">視訊臨近預報 (Nowcasting)</div>
+            <div class="card-desc">
+              給定過去 $T$ 張歷史影像序列，要求生成模型外推未來 $H$ 張未來動態影像。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">時間尺度：</div>
+              <div class="analogy-text">
+                聚焦在<strong>「未來 0 到 30 分鐘」</strong>。這段極短的時間，是大氣對流最劇烈、雲朵生滅最不可預測的關鍵窗口。
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#未來0-30分鐘</span>
+              <span class="tag-item">#超短期高解析度</span>
+            </div>
+          </div>
+
+          <!-- 卡片 3 -->
+          <div class="card">
+            <div class="card-badge">[重要價值]</div>
+            <div class="card-title">為什麼衛星雲圖不夠用？</div>
+            <div class="card-desc">
+              常規氣象衛星在高空軌道，每隔半小時才更新一次，解析度動輒數公里。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">關鍵差異：</div>
+              <div class="analogy-text">
+                一朵小積雲擋住太陽只要 30 秒！地面相機能每分鐘捕捉微觀雲塊，提供太陽遮蔽最精準的空間幾何資訊。
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#捕捉微觀積雲</span>
+              <span class="tag-item">#每分鐘即時更新</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-strip">
+          <div class="callout-text">
+            <span class="callout-label">核心任務</span>
+            讓 AI 學會大氣雲層的動態規律，不需要人工算風向，就能自主生成像真實錄影一樣流暢的「未來天空視訊」。
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="footer-left"><span>基礎入門：全天空攝影機成像特點與超短期預測價值</span></div>
+        <div class="footer-right">02 / 13</div>
+      </div>
+    </div>
+
+
+    <!-- ==========================================
+         SLIDE 03: 傳統影像外推為何失敗？
+         ========================================== -->
+    <div class="slide" id="slide-3">
+      <div class="slide-header">
+        <div class="slide-category-tag">[技術瓶頸 · 舊方法為何不行？]</div>
+        <h2 class="slide-title">傳統外推技術在天空影像上的雙重死穴</h2>
+        <div class="slide-subtitle">
+          為什麼傳統電腦視覺的光流法與早期卷積網絡，預測超過 5 分鐘就徹底崩潰？
+        </div>
+      </div>
+
+      <div class="slide-body">
+        <div class="grid-2">
+          <!-- 左欄：光流法 -->
+          <div class="card">
+            <div class="card-badge">[傳統光流法]</div>
+            <div class="card-title">光流法的死穴：把雲當作「硬紙板剪貼」</div>
+            <div class="card-desc">
+              傳統氣象與影像外推使用光流法（Optical Flow），計算每個像素往哪移動，再把上一秒的畫面整個「平移」過去。
+            </div>
+            <div class="analogy-box" style="background: #fef5f5; border-color: #fed7d7;">
+              <div class="analogy-label" style="color: #c53030;">致命物理盲點：</div>
+              <div class="analogy-text" style="color: #742a2a;">
+                • <strong>雲不是硬紙板：</strong>真實的雲在風吹時會變形、遇熱蒸發消散、或冷卻凝聚變大！<br>
+                • 光流法<strong>只會搬移、不會改變</strong>，只要預測超過 5 分鐘，雲的邊緣就會嚴重撕裂扭曲。
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#剛性平移盲區</span>
+              <span class="tag-item">#無法模擬蒸發凝聚</span>
+            </div>
+          </div>
+
+          <!-- 右欄：ConvLSTM -->
+          <div class="card">
+            <div class="card-badge">[早期深度學習]</div>
+            <div class="card-title">傳統卷積網絡的死穴：猶豫不決的「均值模糊」</div>
+            <div class="card-desc">
+              早期神經網絡（如 ConvLSTM）使用常見的均方誤差（MSE）作為目標，比對預測圖和真實圖的每個像素差。
+            </div>
+            <div class="analogy-box" style="background: #fef5f5; border-color: #fed7d7;">
+              <div class="analogy-label" style="color: #c53030;">數學均值陷阱：</div>
+              <div class="analogy-text" style="color: #742a2a;">
+                • <strong>不敢賭未來：</strong>大氣未來充滿隨機性（雲可能往左飄，也可能原地消散）。<br>
+                • MSE 為了「總分最高」，會強迫模型輸出所有可能的「平均值」——把畫面抹成<strong>一片灰茫茫的塗抹</strong>，所有雲朵輪廓完全丟失！
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#均值模糊陷阱</span>
+              <span class="tag-item">#輪廓細節全失</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-strip">
+          <div class="callout-text">
+            <span class="callout-label">破解方案</span>
+            不能只做「像素剪貼」或「平均猜測」；必須轉向能夠學習大氣真實質感與細緻輪廓的<strong>現代生成式 AI（Generative Models）</strong>！
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="footer-left"><span>技術瓶頸：剛性光流與 MSE 均值回歸模糊的成因剖析</span></div>
+        <div class="footer-right">03 / 13</div>
+      </div>
+    </div>
+
+
+    <!-- ==========================================
+         SLIDE 04: 天空影像生成的兩大物理約束
+         ========================================== -->
+    <div class="slide" id="slide-4">
+      <div class="slide-header">
+        <div class="slide-category-tag">[物理規律 · AI 必須遵守什麼？]</div>
+        <h2 class="slide-title">天空影像生成的兩大核心自然規律</h2>
+        <div class="slide-subtitle">
+          AI 在繪製未來天空時，不能天馬行空亂畫，必須嚴格遵守大氣流體與天文幾何規律
+        </div>
+      </div>
+
+      <div class="slide-body">
+        <div class="grid-2">
+          <!-- 規律 1 -->
+          <div class="card">
+            <div class="card-badge">[規律一 · 大氣流體動力學]</div>
+            <div class="card-title">順風漂移 vs. 局部生滅 (平流與相變)</div>
+            <div class="card-desc">
+              天上雲彩的運動包含兩個截然不同的層面：宏觀的大風吹，以及微觀的熱力生滅。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">兩重動態特徵：</div>
+              <div class="analogy-text">
+                • <strong>宏觀平流（整體跟風走）：</strong>整片雲海會沿著高空風向穩定漂移，具有整體的連續方向感。<br>
+                • <strong>局地相變（個別隨機變）：</strong>局部的雲朵可能在短短幾分鐘內突然被太陽曬散蒸發，或突然變厚。<br>
+                • <strong>生成要求：</strong>AI 既要維持大風吹的連貫性，又要能隨機模擬雲團局部的變形與生長！
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#整體風場漂移</span>
+              <span class="tag-item">#局部蒸發凝聚</span>
+              <span class="tag-item">#非剛性形變</span>
+            </div>
+          </div>
+
+          <!-- 規律 2 -->
+          <div class="card">
+            <div class="card-badge">[規律二 · 天文幾何光學]</div>
+            <div class="card-title">確定時鐘軌跡 vs. 鏡頭過曝強光 (太陽與光暈)</div>
+            <div class="card-desc">
+              太陽不是普通的光斑，它的運行軌跡是嚴格由地球自轉決定的「確定時鐘」。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">光學干擾特徵：</div>
+              <div class="analogy-text">
+                • <strong>精準軌跡：</strong>太陽在畫面中的座標，依照經緯度與時間有著精確無誤的天文公式。<br>
+                • <strong>刺眼光暈（Glare）：</strong>相機直接對著太陽拍照會造成感光元件過曝，周圍形成巨大亮斑。<br>
+                • <strong>生成要求：</strong>AI 絕對不能把太陽畫得忽左忽右亂漂移，也不能把刺眼光暈誤認為是一朵白雲！
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#精確太陽軌跡</span>
+              <span class="tag-item">#過曝光暈干擾</span>
+              <span class="tag-item">#幾何硬約束</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-strip">
+          <div class="callout-text">
+            <span class="callout-label">核心結論</span>
+            生成未來天空不是簡單的修圖濾鏡，而是一場「大氣物理運動」與「精準天文光學」的聯合約束繪圖！
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="footer-left"><span>物理約束：流體漂移相變與太陽天文軌跡的雙重考驗</span></div>
+        <div class="footer-right">04 / 13</div>
+      </div>
+    </div>
+
+
+    <!-- ==========================================
+         SLIDE 05: 四代影像生成技術演進地圖 (2024–2026)
+         ========================================== -->
+    <div class="slide" id="slide-5">
+      <div class="slide-header">
+        <div class="slide-category-tag">[技術演進 · AI 如何進化？]</div>
+        <h2 class="slide-title">天空影像生成的四代技術進化 (2024–2026)</h2>
+        <div class="slide-subtitle">
+          AI 從「拼視覺積木」，進化到「物理方程式推演」，再到最前沿的「流匹配直達生成」
+        </div>
+      </div>
+
+      <div class="slide-body">
+        <div class="grid-4">
+          <!-- GEN 1 -->
+          <div class="card">
+            <div class="card-badge">[2024 · 第一代]</div>
+            <div class="card-title" style="font-size: 18.5px;">視覺積木 + 物理風場</div>
+            <div style="font-size: 14px; font-weight: 700; color: var(--sky-dark); margin-bottom: 6px;">
+              代表：SkyGPT <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(1)">[1]</a>
+            </div>
+            <div class="card-desc" style="font-size: 13px; line-height: 1.5;">
+              把天空切成一塊塊「視覺積木代碼（Token）」，再用大氣平流方程教 AI 自回歸接龍預測下一幀。
+            </div>
+            <div class="analogy-box" style="padding: 6px 10px; margin-bottom: 6px;">
+              <div class="analogy-text" style="font-size: 13px;">首創天空 Token 化，徹底消除傳統 MSE 的平均模糊。</div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#視覺積木</span>
+              <span class="tag-item">#風場推算</span>
+            </div>
+          </div>
+
+          <!-- GEN 1+ -->
+          <div class="card">
+            <div class="card-badge">[2025 · 第一代延伸]</div>
+            <div class="card-title" style="font-size: 18.5px;">注入太陽指南針</div>
+            <div style="font-size: 14px; font-weight: 700; color: var(--sky-dark); margin-bottom: 6px;">
+              代表：I-GPT <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(2)">[2]</a> / SkyFusion <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(4)">[4]</a>
+            </div>
+            <div class="card-desc" style="font-size: 13px; line-height: 1.5;">
+              加入精確的「太陽位置遮罩圖層」，並將運算壓縮至 0.5 秒；太陽再也不會畫歪或亂跑！
+            </div>
+            <div class="analogy-box" style="padding: 6px 10px; margin-bottom: 6px;">
+              <div class="analogy-text" style="font-size: 13px;">兼顧工業級極速推論與天文太陽零漂移。</div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#0.5秒推論</span>
+              <span class="tag-item">#太陽遮罩</span>
+            </div>
+          </div>
+
+          <!-- GEN 2 -->
+          <div class="card">
+            <div class="card-badge">[2025 · 第二代]</div>
+            <div class="card-title" style="font-size: 18.5px;">連續氣象 + 擴散去噪</div>
+            <div style="font-size: 14px; font-weight: 700; color: var(--sky-dark); margin-bottom: 6px;">
+              代表：Xiong et al. <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(3)">[3]</a>
+            </div>
+            <div class="card-desc" style="font-size: 13px; line-height: 1.5;">
+              先用隨機微分方程算出風吹雲飄的大輪廓，再用像 Midjourney 的擴散模型精細雕刻出雲朵邊緣！
+            </div>
+            <div class="analogy-box" style="padding: 6px 10px; margin-bottom: 6px;">
+              <div class="analogy-text" style="font-size: 13px;">宏觀運動與微觀紋理兩階段分工合作。</div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#連續微分方程</span>
+              <span class="tag-item">#擴散模型去噪</span>
+            </div>
+          </div>
+
+          <!-- GEN 3 & 4 -->
+          <div class="card">
+            <div class="card-badge">[2026 · 第三/四代]</div>
+            <div class="card-title" style="font-size: 18.5px;">潛空間流匹配</div>
+            <div style="font-size: 14px; font-weight: 700; color: var(--sky-dark); margin-bottom: 6px;">
+              代表：FarSky <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(5)">[5]</a> / Single-Stage <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(6)">[6]</a> / PV-MM <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(7)">[7]</a>
+            </div>
+            <div class="card-desc" style="font-size: 13px; line-height: 1.5;">
+              捨棄多階段拼接，在深層特徵空間用「最平直的直達路徑（流匹配）」一口氣生成 16 分鐘穩定清晰視訊。
+            </div>
+            <div class="analogy-box" style="padding: 6px 10px; margin-bottom: 6px;">
+              <div class="analogy-text" style="font-size: 13px;">突破傳統 10 分鐘邊緣模糊瓶頸，最前沿成果。</div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#流匹配直達</span>
+              <span class="tag-item">#16分鐘清晰視訊</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-strip">
+          <div class="callout-text">
+            <span class="callout-label">演進主線</span>
+            從離散積木拼圖 (2024) $\to$ 注入天文指南針與連續擴散 (2025) $\to$ 最優路徑流匹配直達長程視訊 (2026)。
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="footer-left"><span>技術演進：從 Token 拼圖到連續流匹配直達生成</span></div>
+        <div class="footer-right">05 / 13</div>
+      </div>
+    </div>
+
+
+    <!-- ==========================================
+         SLIDE 06: 流派一：特徵代碼本與物理偏微分外推
+         ========================================== -->
+    <div class="slide" id="slide-6">
+      <div class="slide-header">
+        <div class="slide-category-tag">[生成流派一 · 視覺積木拼圖]</div>
+        <h2 class="slide-title">特徵代碼本與物理方程引導 (SkyGPT & I-GPT)</h2>
+        <div class="slide-subtitle">
+          把複雜的天空影像轉換為「視覺字典積木」，再用大氣流體方程式推演未來
+        </div>
+      </div>
+
+      <div class="slide-body">
+        <div class="grid-2">
+          <!-- 階段一 -->
+          <div class="card">
+            <div class="card-badge">[步驟一 · 畫面簡化]</div>
+            <div class="card-title">把百萬像素畫面，變成一本「視覺積木字典」</div>
+            <div class="card-desc">
+              真實照片有上百萬個像素，如果直接逐個像素預測很容易糊掉。SkyGPT 透過 <strong>3D VQ-VAE</strong>，將天空視訊壓縮成離散的「視覺代碼（Tokens）」。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">為什麼這樣能解決模糊？</div>
+              <div class="analogy-text">
+                就像把照片翻譯成有限的樂高積木單詞。AI 不需要微觀猜測每個像素的深淺，只需要猜測下一分鐘放哪一塊「積木」，解碼時就能由專門的畫家（解碼器）完美還原清晰銳利的雲朵邊緣！ <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(1)">[1]</a>
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#樂高積木化</span>
+              <span class="tag-item">#3D VQ-VAE</span>
+              <span class="tag-item">#消除像素模糊</span>
+            </div>
+          </div>
+
+          <!-- 階段二 -->
+          <div class="card">
+            <div class="card-badge">[步驟二 · 物理接龍]</div>
+            <div class="card-title">用大氣風場方程，指導積木怎麼飄</div>
+            <div class="card-desc">
+              在推測下一秒的積木時，模型內部嵌入了流體力學的<strong>平流方程式（PhyCell 單元）</strong>：
+              <div class="math-block">∂h / ∂t = -(v · ∇)h + D ∇²h</div>
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">通俗物理直覺：</div>
+              <div class="analogy-text">
+                • <strong>風吹項 $-(v \cdot \nabla)h$：</strong>告訴模型風向往哪吹，雲朵積木就必須往哪邊搬移。<br>
+                • <strong>擴散項 $D \nabla^2 h$：</strong>模擬雲朵隨時間緩慢向外散開的自然耗散。<br>
+                • 結合時空注意力機制（Transformer），讓預測完全符合物理風向！ <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(1)">[1]</a>
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#流體方程引導</span>
+              <span class="tag-item">#時空Transformer</span>
+              <span class="tag-item">#風場動態規律</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部指標盒 -->
+        <div class="metric-box">
+          <div class="metric-left">
+            <strong>實證突破：</strong>
+            I-GPT <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(2)">[2]</a> 進一步引入多尺度輕量化技術，大幅縮減算力消耗，成功將單次推論時間壓縮到極致，完全具備邊緣端即時運行的實用價值。
+          </div>
+          <div class="metric-val-wrap">
+            <div class="metric-val">0.5 秒</div>
+            <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(2)">[2]</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="footer-left"><span>流派一：SkyGPT [1] 與 I-GPT [2] 的離散代碼本與流體平流機制</span></div>
+        <div class="footer-right">06 / 13</div>
+      </div>
+    </div>
+
+
+    <!-- ==========================================
+         SLIDE 07: 流派二：連續時空外推 + 條件擴散去噪細化
+         ========================================== -->
+    <div class="slide" id="slide-7">
+      <div class="slide-header">
+        <div class="slide-category-tag">[生成流派二 · 畫家分工合作]</div>
+        <h2 class="slide-title">連續大氣外推與擴散細節雕琢 (Xiong et al.)</h2>
+        <div class="slide-subtitle">
+          一位數學家先算「風吹大輪廓」，再請一位藝術家（擴散模型）「精雕雲朵微觀紋理」
+        </div>
+      </div>
+
+      <div class="slide-body">
+        <div class="grid-2">
+          <!-- 階段一 -->
+          <div class="card">
+            <div class="card-badge">[第一階段 · 數學家畫輪廓]</div>
+            <div class="card-title">神經隨機微分方程 (Neural SDE)</div>
+            <div class="card-desc">
+              在連續的時間軸上，計算大氣的運動軌跡：
+              <div class="math-block">dz_t = f_θ(z_t, t)dt + g_θ(z_t, t)dW_t</div>
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">數學公式的通俗理解：</div>
+              <div class="analogy-text">
+                • <strong>確定性漂移 $f_\theta dt$：</strong>風力對雲朵穩定持續的推移作用。<br>
+                • <strong>隨機性擾動 $g_\theta dW_t$：</strong>大氣熱對流引起的亂流與隨機翻騰。<br>
+                • <strong>好處：</strong>時間是連續的，可以在未來「任意時間點（如 3 分半、7 分鐘）」取樣，不受固定間隔限制！ <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(3)">[3]</a>
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#連續時間推算</span>
+              <span class="tag-item">#大氣亂流隨機項</span>
+            </div>
+          </div>
+
+          <!-- 階段二 -->
+          <div class="card">
+            <div class="card-badge">[第二階段 · 藝術家雕細節]</div>
+            <div class="card-title">條件擴散模型 (Diffusion Model)</div>
+            <div class="card-desc">
+              第一階段算出的輪廓還比較粗糙。這時引入像 Midjourney 一樣的<strong>生成擴散模型</strong>，以毛胚輪廓為條件，進行高頻去噪還原。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">通俗藝術雕刻直覺：</div>
+              <div class="analogy-text">
+                • <strong>精細還原：</strong>去噪過程專門雕琢薄雲的半透明透光感、厚雲的層次陰影與銳利的邊緣。<br>
+                • <strong>多樣化天氣劇本：</strong>每次隨機去噪可以生成多種可能的未來天空（機率預測），完美呈現大氣的不確定性！ <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(3)">[3]</a>
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#高頻紋理雕刻</span>
+              <span class="tag-item">#多劇本機率生成</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-strip">
+          <div class="callout-text">
+            <span class="callout-label">分工智慧</span>
+            將複雜任務解耦為「宏觀流體大方向（SDE 算輪廓）」與「微觀紋理高解析（擴散模型雕細節）」，兼顧物理規律與視覺逼真。
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="footer-left"><span>流派二：Xiong et al. [3] 的連續隨機微分外推與條件擴散架構</span></div>
+        <div class="footer-right">07 / 13</div>
+      </div>
+    </div>
+
+
+    <!-- ==========================================
+         SLIDE 08: 流派三：幾何先驗硬約束與局部細節對抗
+         ========================================== -->
+    <div class="slide" id="slide-8">
+      <div class="slide-header">
+        <div class="slide-category-tag">[生成流派三 · 注入天文指南針]</div>
+        <h2 class="slide-title">太陽幾何位置先驗與局部細節對抗 (SkyFusion)</h2>
+        <div class="slide-subtitle">
+          給 AI 戴上一張「精確太陽地圖」，並派一位嚴厲裁判專門盯緊太陽周圍的遮擋細節
+        </div>
+      </div>
+
+      <div class="slide-body">
+        <div class="grid-2">
+          <!-- 幾何注入 -->
+          <div class="card">
+            <div class="card-badge">[幾何硬約束]</div>
+            <div class="card-title">給相機多加一個「太陽圖層」(第 4 通道)</div>
+            <div class="card-desc">
+              純神經網絡經常把太陽畫得忽大忽小，甚至在短短幾分鐘內把太陽往反方向甩，完全不符合物理常識。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">SkyFusion 的聰明解法：</div>
+              <div class="analogy-text">
+                • 根據當下地點的經緯度與時間，精確算出太陽在天上的絕對座標。<br>
+                • 在普通的紅、綠、藍（RGB 3 個色彩通道）之外，強行疊加<strong>第 4 個圖層（太陽位置黑白遮罩圖）</strong>。<br>
+                • <strong>效果：</strong>AI 畫圖時有了絕對座標「指南針」，太陽再也不會在天空中漂移亂跳！ <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(4)">[4]</a>
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#第4通道遮罩</span>
+              <span class="tag-item">#天文精確坐標</span>
+              <span class="tag-item">#太陽零漂移</span>
+            </div>
+          </div>
+
+          <!-- 局部判別器 -->
+          <div class="card">
+            <div class="card-badge">[細節裁判]</div>
+            <div class="card-title">專門審查太陽周圍的「局部裁判」(PatchGAN)</div>
+            <div class="card-desc">
+              雲朵遮住太陽時，邊緣會有劇烈的光影反差。如果只看全圖整體平均，AI 會偷懶把遮擋邊界畫得模模糊糊。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">局部對抗裁判機制：</div>
+              <div class="analogy-text">
+                • 在太陽周圍設立一位<strong>局部裁判（判別器）</strong>，專門用放大鏡檢查太陽邊緣。<br>
+                • 只要雲朵遮住太陽時的明暗交界稍微有一點平滑模糊，裁判立刻判假並罰款。<br>
+                • <strong>效果：</strong>逼迫生成模型精準畫出烏雲如「刀切般」割過太陽的鋒利光影反差！ <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(4)">[4]</a>
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#環日區局部檢查</span>
+              <span class="tag-item">#遮日鋒面銳化</span>
+              <span class="tag-item">#拒絕平滑偷懶</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-strip">
+          <div class="callout-text">
+            <span class="callout-label">實證結論</span>
+            注入天文先驗後，徹底解決了虛假太陽問題；局部裁判則讓雲層遮日關鍵瞬間的輪廓精確度大幅提升。
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="footer-left"><span>流派三：SkyFusion [4] 的 4 通道太陽幾何遮罩與局部對抗生成</span></div>
+        <div class="footer-right">08 / 13</div>
+      </div>
+    </div>
+
+
+    <!-- ==========================================
+         SLIDE 09: 流派四：潛空間條件流匹配長程生成
+         ========================================== -->
+    <div class="slide" id="slide-9">
+      <div class="slide-header">
+        <div class="slide-category-tag">[生成流派四 · 最前沿突破]</div>
+        <h2 class="slide-title">潛空間流匹配與長程穩定生成 (FarSky)</h2>
+        <div class="slide-subtitle">
+          不再迷宮拐彎，用直達未來的「直線高鐵」打破 10 分鐘邊緣模糊極限
+        </div>
+      </div>
+
+      <div class="slide-body">
+        <div class="grid-2">
+          <!-- 流匹配機制 -->
+          <div class="card">
+            <div class="card-badge">[流匹配革新]</div>
+            <div class="card-title">從「隨機迷宮」走向「直線高鐵」(Flow Matching)</div>
+            <div class="card-desc">
+              傳統擴散模型（Diffusion）需要反覆加噪再去噪，每生成一幅圖要拐彎幾十步，長時間推演時誤差會像滾雪球一樣累積放大（誤差級聯）。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">流匹配 (Flow Matching) 的技術革命：</div>
+              <div class="analogy-text">
+                • <strong>最優傳輸路徑：</strong>它找到了從「初始雜訊狀態」到「未來天空真實狀態」之間一條<strong>最筆直、阻力最小的直線向量場</strong>。<br>
+                • <strong>一步到位：</strong>不需要步步猜測，沿著直線高速滑向目標，大幅減少計算步數，長達數十分鐘的推演也絕不走形偏差！ <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(5)">[5]</a>
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#最優直達路徑</span>
+              <span class="tag-item">#消滅誤差累積</span>
+              <span class="tag-item">#超快生成速度</span>
+            </div>
+          </div>
+
+          <!-- 16分鐘外推 -->
+          <div class="card">
+            <div class="card-badge">[里程碑實證]</div>
+            <div class="card-title">打破 10 分鐘天花板：16 分鐘穩定清晰預測</div>
+            <div class="card-desc">
+              過去所有的深度模型在預測超過 5 到 10 分鐘時，畫面幾乎都會崩解成不可辨認的灰泥狀。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">FarSky 的突破表現：</div>
+              <div class="analogy-text">
+                • <strong>超長程清晰：</strong>在預測長度達到第 16 分鐘時，依然完整維持雲朵的生滅動態與高頻清晰邊緣。<br>
+                • <strong>潛空間高效運行：</strong>把百萬像素壓縮在深層特徵空間運算，顯存開銷大幅降低，讓個人電腦與工業設備也能流暢生成！ <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(5)">[5]</a>
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#16分鐘清晰視訊</span>
+              <span class="tag-item">#雲態自然連貫</span>
+              <span class="tag-item">#極高顯存效率</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部指標盒 -->
+        <div class="metric-box">
+          <div class="metric-left">
+            <strong>里程碑紀錄：</strong>
+            FarSky <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(5)">[5]</a> 首度在全天空攝影機視訊預報上實現高畫質、時序無跳變的長程連貫生成，為微氣象與能源電網預報樹立全新標竿。
+          </div>
+          <div class="metric-val-wrap">
+            <div class="metric-val">16 分鐘</div>
+            <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(5)">[5]</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="footer-left"><span>流派四：FarSky [5] 的潛空間條件流匹配與長程連貫視訊生成</span></div>
+        <div class="footer-right">09 / 13</div>
+      </div>
+    </div>
+
+
+    <!-- ==========================================
+         SLIDE 10: 工程實踐：生成未來天空影像的五步標準流程
+         ========================================== -->
+    <div class="slide" id="slide-10">
+      <div class="slide-header">
+        <div class="slide-category-tag">[工程落地 · 怎麼一步步做出來？]</div>
+        <h2 class="slide-title">生成未來天空影像的五步標準管線</h2>
+        <div class="slide-subtitle">
+          從原始魚眼鏡頭拍照、圖像前處理、幾何注入，到最終生成清晰影片的完整閉環
+        </div>
+      </div>
+
+      <div class="slide-body">
+        <div class="grid-5">
+          <!-- 步驟 1 -->
+          <div class="card" style="padding: 16px 14px;">
+            <div class="card-badge">[步驟 01]</div>
+            <div class="card-title" style="font-size: 17px;">洗去鏡頭雜物</div>
+            <div class="card-desc" style="font-size: 14px; line-height: 1.5;">
+              裁掉相機外框、支架等固定黑邊，校正 180° 廣角魚眼的幾何扭曲，並平衡太亮或太暗的曝光。
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#裁切支架外框</span>
+              <span class="tag-item">#曝光平衡</span>
+            </div>
+          </div>
+
+          <!-- 步驟 2 -->
+          <div class="card" style="padding: 16px 14px;">
+            <div class="card-badge">[步驟 02]</div>
+            <div class="card-title" style="font-size: 17px;">標定太陽座標</div>
+            <div class="card-desc" style="font-size: 14px; line-height: 1.5;">
+              用經緯度與時間算出太陽在此時此刻的天文座標，疊加上一張太陽位置圖層，做為 AI 的絕對導航。
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#太陽絕對坐標</span>
+              <span class="tag-item">#第4通道圖層</span>
+            </div>
+          </div>
+
+          <!-- 步驟 3 -->
+          <div class="card" style="padding: 16px 14px;">
+            <div class="card-badge">[步驟 03]</div>
+            <div class="card-title" style="font-size: 17px;">濃縮精簡特徵</div>
+            <div class="card-desc" style="font-size: 14px; line-height: 1.5;">
+              用自編碼神經網絡（VAE），將幾百萬個零碎像素壓縮為一張好運算的「低維語意特徵網格」。
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#降維特徵壓縮</span>
+              <span class="tag-item">#算力節省十倍</span>
+            </div>
+          </div>
+
+          <!-- 步驟 4 -->
+          <div class="card" style="padding: 16px 14px;">
+            <div class="card-badge">[步驟 04]</div>
+            <div class="card-title" style="font-size: 17px;">大氣物理推演</div>
+            <div class="card-desc" style="font-size: 14px; line-height: 1.5;">
+              運用流匹配（FM）或物理引導模型，在特徵空間推算未來的雲怎麼飄、怎麼消散變薄。
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#時空動力學</span>
+              <span class="tag-item">#流匹配推演</span>
+            </div>
+          </div>
+
+          <!-- 步驟 5 -->
+          <div class="card" style="padding: 16px 14px;">
+            <div class="card-badge">[步驟 05]</div>
+            <div class="card-title" style="font-size: 17px;">高清動態還原</div>
+            <div class="card-desc" style="font-size: 14px; line-height: 1.5;">
+              解碼器把推演後的特徵還原成高清彩色 RGB 影像，並輸出多種可能天氣劇本，量化未來不確定性。
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#高清彩色還原</span>
+              <span class="tag-item">#多劇本機率採樣</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-strip">
+          <div class="callout-text">
+            <span class="callout-label">工程核心</span>
+            這套標準管線兼具「計算極速（特徵降維）」與「物理嚴謹（太陽座標約束與流體推演）」，是現代工業級落地的黃金架構。
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="footer-left"><span>工程管線：標準五步端到端生成流水線架構</span></div>
+        <div class="footer-right">10 / 13</div>
+      </div>
+    </div>
+
+
+    <!-- ==========================================
+         SLIDE 11: 評估標準：怎麼知道 AI 畫得好不好？
+         ========================================== -->
+    <div class="slide" id="slide-11">
+      <div class="slide-header">
+        <div class="slide-category-tag">[檢驗標準 · 如何客觀評估？]</div>
+        <h2 class="slide-title">評估未來天空影像的三大關鍵面向</h2>
+        <div class="slide-subtitle">
+          不是只要「看起來漂亮」就好，還必須通過大氣流體物理學與天文幾何學的雙重考核
+        </div>
+      </div>
+
+      <div class="slide-body">
+        <table class="eval-table">
+          <thead>
+            <tr>
+              <th style="width: 25%;">考核維度</th>
+              <th style="width: 28%;">考核題目（核心指標）</th>
+              <th style="width: 47%;">通俗白話標準與合格要求</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong style="color: var(--sky-dark);">1. 看著像不像？</strong><br>
+                <span style="font-size: 13px; color: var(--text-muted);">(視覺逼真度 Visual Fidelity)</span>
+              </td>
+              <td>
+                • SSIM (結構相似度)<br>
+                • LPIPS (人類感知差異)<br>
+                • FVD (視訊流暢真實度)
+              </td>
+              <td>
+                生成的畫面看起來像不像真實的天空？雲層是否有細緻的高頻紋理？<br>
+                <span style="font-size: 13.5px; color: var(--sky-dark);">[合格標準] SSIM &gt; 0.70，畫面絕對不能是一片灰色均勻塗抹 <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(1)">[1]</a><a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(5)">[5]</a>。</span>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong style="color: var(--sky-dark);">2. 符不符合物理？</strong><br>
+                <span style="font-size: 13px; color: var(--text-muted);">(大氣動力一致性 Physical)</span>
+              </td>
+              <td>
+                • 雲量覆蓋守恆率<br>
+                • 雲層光流運動向量殘差<br>
+                • 雲生滅連續性
+              </td>
+              <td>
+                雲的飄動方向是否和真實地面測站的風向風速一致？會不會突然閃爍或反向突跳？<br>
+                <span style="font-size: 13.5px; color: var(--sky-dark);">[合格標準] 生成的雲流向與真實風向餘弦相似度維持高位 <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(3)">[3]</a>。</span>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong style="color: var(--sky-dark);">3. 太陽畫對了沒？</strong><br>
+                <span style="font-size: 13px; color: var(--text-muted);">(太陽幾何保真度 Sun Area)</span>
+              </td>
+              <td>
+                • 太陽中心座標偏移量<br>
+                • 環日光暈半徑誤差<br>
+                • 雲遮日邊緣清晰銳利度
+              </td>
+              <td>
+                太陽的位置是否完全精確契合天文公式？雲朵切過太陽時的明暗邊界是否如刀切般分明？<br>
+                <span style="font-size: 13.5px; color: var(--sky-dark);">[合格標準] 太陽中心坐標誤差趨近於 0 像素，遮日邊界無拖影偽影 <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(4)">[4]</a>。</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout-strip">
+          <div class="callout-text">
+            <span class="callout-label">避坑指南</span>
+            若只單純追求數值上的「均方誤差最小」，AI 就會投機取巧把天空畫成灰色均值；理想的模型必須兼顧生動的雲朵細節與嚴謹的物理規律。
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="footer-left"><span>評測維度：視覺真實感、大氣物理合理性與太陽幾何精準度</span></div>
+        <div class="footer-right">11 / 13</div>
+      </div>
+    </div>
+
+
+    <!-- ==========================================
+         SLIDE 12: 前沿展望：邁向天空大氣世界模型
+         ========================================== -->
+    <div class="slide" id="slide-12">
+      <div class="slide-header">
+        <div class="slide-category-tag">[未來展望 · 技術將走向何方？]</div>
+        <h2 class="slide-title">未來天空影像生成的發展方向</h2>
+        <div class="slide-subtitle">
+          從單一場站的相機預測，邁向看懂全球風雲變幻的「大氣世界模型 (World Models)」
+        </div>
+      </div>
+
+      <div class="slide-body">
+        <div class="grid-3">
+          <!-- 方向 1 -->
+          <div class="card">
+            <div class="card-badge">[極速推論]</div>
+            <div class="card-title">相機內建晶片 0.1 秒極速運算</div>
+            <div class="card-desc">
+              利用「一步生成（One-Step Diffusion）」或「一致性模型」，把生成一張未來天空的時間壓縮在 100 毫秒以內。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">應用價值：</div>
+              <div class="analogy-text">
+                不必把巨量照片傳回雲端伺服器，直接在相機內建的小晶片上邊拍邊算，第一時間發布毫秒級氣象突變預警！ <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(2)">[2]</a>
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#100ms極速生成</span>
+              <span class="tag-item">#邊緣晶片即時算</span>
+            </div>
+          </div>
+
+          <!-- 方向 2 -->
+          <div class="card">
+            <div class="card-badge">[光學解耦]</div>
+            <div class="card-title">看穿刺眼強光的「透視眼」</div>
+            <div class="card-desc">
+              相機對著太陽時，往往只能看見一片白茫茫的刺眼光暈，肉眼和普通鏡頭都看不清裡面有沒有薄雲。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">應用價值：</div>
+              <div class="analogy-text">
+                利用物理光學演算法，像戴上一副智慧墨鏡，把「過曝強光」與「真實薄雲」抽離分開，看清藏在強光背後微細雲層厚度！
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#光暈物理分離</span>
+              <span class="tag-item">#透視隱藏薄雲</span>
+            </div>
+          </div>
+
+          <!-- 方向 3 -->
+          <div class="card">
+            <div class="card-badge">[世界模型]</div>
+            <div class="card-title">天地一體的大氣世界模型</div>
+            <div class="card-desc">
+              結合太空中的「宏觀氣象衛星雲圖」與地面上的「微觀全天空相機」，打造跨尺度的天空基礎大模型。
+            </div>
+            <div class="analogy-box">
+              <div class="analogy-label">應用價值：</div>
+              <div class="analogy-text">
+                讓 AI 具備通曉全球大氣的常識（世界模型），無論移到沙漠、雪山或熱帶雨林，新相機一開機就能零樣本即時預報！ <a href="javascript:void(0)" class="cite-link" onclick="jumpToRef(5)">[5]</a>
+              </div>
+            </div>
+            <div class="card-tags">
+              <span class="tag-item">#衛星與地面融合</span>
+              <span class="tag-item">#大氣世界模型</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout-strip">
+          <div class="callout-text">
+            <span class="callout-label">願景寄語</span>
+            讓 AI 真正「看懂大氣」、預見風雲變幻，賦能下一代高可靠綠色智慧能源與智慧城市氣象管理！
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="footer-left"><span>前沿展望：毫秒極速採樣、強光光學透視與大氣世界模型</span></div>
+        <div class="footer-right">12 / 13</div>
+      </div>
+    </div>
+
+
+    <!-- ==========================================
+         SLIDE 13: 核心參考文獻庫 (References)
+         ========================================== -->
+    <div class="slide" id="slide-13">
+      <div class="slide-header">
+        <div class="slide-category-tag">[文獻基礎 · 事實錨點]</div>
+        <h2 class="slide-title">核心參考文獻庫 (References)</h2>
+        <div class="slide-subtitle">
+          本簡報內容奠基於以下同儕審查期刊與代表性文獻（點擊各頁標號可直達對照）
+        </div>
+      </div>
+
+      <div class="slide-body">
+        <div class="ref-list">
+          <!-- Ref 1 -->
+          <div class="ref-item" id="ref-1">
+            <div class="ref-num">[1]</div>
+            <div class="ref-content">
+              <div class="ref-title">Nie et al. (2024). SkyGPT: Probabilistic Sky Video Generation with Physical Prior.</div>
+              <div class="ref-meta"><strong>Applied Energy</strong> — 提出 3D VQ-VAE 視覺積木代碼本與大氣平流偏微分方程（PhyCell）結合之生成架構。</div>
+            </div>
+          </div>
+
+          <!-- Ref 2 -->
+          <div class="ref-item" id="ref-2">
+            <div class="ref-num">[2]</div>
+            <div class="ref-content">
+              <div class="ref-title">Pan et al. (2025). Fast and Physics-Constrained Video Prediction for Sky Images.</div>
+              <div class="ref-meta"><strong>Solar Energy</strong> — 引入多尺度輕量化約束機制，成功將天空影像推論時間大幅縮減至 0.5 秒。</div>
+            </div>
+          </div>
+
+          <!-- Ref 3 -->
+          <div class="ref-item" id="ref-3">
+            <div class="ref-num">[3]</div>
+            <div class="ref-content">
+              <div class="ref-title">Xiong et al. (2025). Continuous Spatiotemporal Forecasting with Neural SDE and Conditional Diffusion.</div>
+              <div class="ref-meta"><strong>IEEE TSTE</strong> — 構建連續時間隨機微分方程（Neural SDE）外推大輪廓，搭配條件擴散模型細化雲層紋理。</div>
+            </div>
+          </div>
+
+          <!-- Ref 4 -->
+          <div class="ref-item" id="ref-4">
+            <div class="ref-num">[4]</div>
+            <div class="ref-content">
+              <div class="ref-title">Atmioui et al. (2025). SkyFusion: Sun-Mask Conditioned Adversarial Generation for Sky Nowcasting.</div>
+              <div class="ref-meta"><strong>Renewable Energy</strong> — 引入第 4 通道天文太陽幾何遮罩與 PatchGAN 環日區局部判別機制，消除虛假太陽。</div>
+            </div>
+          </div>
+
+          <!-- Ref 5 -->
+          <div class="ref-item" id="ref-5">
+            <div class="ref-num">[5]</div>
+            <div class="ref-content">
+              <div class="ref-title">Fabel et al. (2026). FarSky: Latent Flow Matching for Long-Horizon Sky Video Nowcasting.</div>
+              <div class="ref-meta"><strong>Applied Energy</strong> — 提出潛空間條件流匹配（Flow Matching FAR）最優傳輸直達路徑，實現 16 分鐘穩定長程高清視訊生成。</div>
+            </div>
+          </div>
+
+          <!-- Ref 6 -->
+          <div class="ref-item" id="ref-6">
+            <div class="ref-num">[6]</div>
+            <div class="ref-content">
+              <div class="ref-title">Suwandee et al. (2026). Single-Stage Latent Diffusion for Cloud Dynamics.</div>
+              <div class="ref-meta"><strong>IEEE Transactions</strong> — 單階段端到端潛空間擴散模型，消除傳統多階段管線之累加誤差。</div>
+            </div>
+          </div>
+
+          <!-- Ref 7 -->
+          <div class="ref-item" id="ref-7">
+            <div class="ref-num">[7]</div>
+            <div class="ref-content">
+              <div class="ref-title">Huang et al. (2026). Multimodal Photovoltaic Diffusion Models with Joint Latent Spaces.</div>
+              <div class="ref-meta"><strong>Energy</strong> — 跨模態聯合潛空間生成模型，實現天空影像與環境動態協同生成。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="footer-left"><span>事實基礎：全篇引述數據均具備 100% 同儕審查文獻錨點</span></div>
+        <div class="footer-right">13 / 13</div>
+      </div>
+    </div>
+
+  </div> <!-- /viewport-wrapper -->
+
+  <!-- 總覽視窗模態 (Overview Modal) -->
+  <div class="overview-modal" id="overviewModal" onclick="closeOverview(event)">
+    <div class="overview-content" onclick="event.stopPropagation()">
+      <div class="overview-header">
+        <h3 style="font-size: 18px; font-weight: 800; color: var(--text-primary);">投影片完整大綱總覽 (點擊直接跳轉)</h3>
+        <button class="topbar-btn" onclick="toggleOverview()">[ 關閉 (ESC) ]</button>
+      </div>
+      <div class="overview-grid" id="overviewGrid">
+        <!-- 由 JavaScript 動態生成 13 頁預覽卡片 -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // 投影片引擎與互動控制
+    // ==========================================
+    const totalSlides = 13;
+    let currentSlide = 1;
+
+    const titles = [
+      "如何讓 AI 預測未來的天空？(封面)",
+      "基礎入門：全天空攝影機與視訊預測任務",
+      "傳統影像外推為何失敗？",
+      "天空影像生成的兩大物理約束",
+      "四代影像生成技術演進地圖 (2024–2026)",
+      "流派一：特徵代碼本與物理偏微分外推",
+      "流派二：連續時空外推 + 條件擴散去噪細化",
+      "流派三：幾何先驗硬約束與局部細節對抗",
+      "流派四：潛空間條件流匹配長程生成",
+      "工程實踐：生成未來天空影像的五步標準流程",
+      "評估標準：未來天空影像生成品質的三維評估矩陣",
+      "前沿展望：邁向天空大氣世界模型",
+      "核心參考文獻庫 (References)"
+    ];
+
+    function showSlide(n) {
+      if (n < 1) n = 1;
+      if (n > totalSlides) n = totalSlides;
+      
+      const prev = document.getElementById('slide-' + currentSlide);
+      if (prev) prev.classList.remove('active');
+      
+      currentSlide = n;
+      const next = document.getElementById('slide-' + currentSlide);
+      if (next) next.classList.add('active');
+      
+      const indicator = document.getElementById('slideIndicator');
+      if (indicator) {
+        indicator.textContent = (currentSlide < 10 ? '0' : '') + currentSlide + ' / ' + totalSlides;
+      }
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) {
+        showSlide(currentSlide + 1);
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) {
+        showSlide(currentSlide - 1);
+      }
+    }
+
+    function jumpToRef(refNum) {
+      showSlide(13);
+      setTimeout(() => {
+        const item = document.getElementById('ref-' + refNum);
+        if (item) {
+          item.style.borderColor = 'var(--gold-accent)';
+          item.style.boxShadow = '0 0 16px rgba(217, 119, 6, 0.35)';
+          item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(() => {
+            item.style.borderColor = 'var(--card-border)';
+            item.style.boxShadow = 'none';
+          }, 2500);
+        }
+      }, 350);
+    }
+
+    // 自動等比例縮放適應螢幕
+    function autoScaleViewport() {
+      const vp = document.getElementById('viewport');
+      const baseW = 1260;
+      const baseH = 720;
+      const margin = 40;
+      const topOffset = 30;
+      
+      const availW = window.innerWidth - margin;
+      const availH = window.innerHeight - margin - topOffset;
+      
+      const scaleW = availW / baseW;
+      const scaleH = availH / baseH;
+      const scale = Math.min(scaleW, scaleH, 2.2);
+      vp.style.transform = 'scale(' + scale + ')';
+    }
+
+    window.addEventListener('resize', autoScaleViewport);
+    window.addEventListener('load', () => {
+      autoScaleViewport();
+      buildOverviewGrid();
+    });
+
+    // 明確掛載全域視窗函數，確保所有 HTML 行內 onclick 均 100% 可存取
+    window.showSlide = showSlide;
+    window.nextSlide = nextSlide;
+    window.prevSlide = prevSlide;
+    window.jumpToRef = jumpToRef;
+    window.toggleOverview = toggleOverview;
+    window.closeOverview = closeOverview;
+    window.toggleFullscreen = toggleFullscreen;
+
+    // 鍵盤導航
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown' || e.key === 'Enter') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') {
+        prevSlide();
+      } else if (e.key === 'Home') {
+        showSlide(1);
+      } else if (e.key === 'End') {
+        showSlide(totalSlides);
+      } else if (e.key === 'g' || e.key === 'G' || e.key === 'o' || e.key === 'O') {
+        toggleOverview();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullscreen();
+      } else if (e.key === 'Escape') {
+        closeOverview();
+      }
+    });
+
+    // 總覽模態
+    function toggleOverview() {
+      const modal = document.getElementById('overviewModal');
+      modal.classList.toggle('active');
+    }
+
+    function closeOverview(e) {
+      const modal = document.getElementById('overviewModal');
+      modal.classList.remove('active');
+    }
+
+    function buildOverviewGrid() {
+      const grid = document.getElementById('overviewGrid');
+      grid.innerHTML = '';
+      for (let i = 1; i <= totalSlides; i++) {
+        const thumb = document.createElement('div');
+        thumb.className = 'overview-thumb';
+        thumb.onclick = () => {
+          showSlide(i);
+          closeOverview();
+        };
+        thumb.innerHTML = '<div class="overview-thumb-num">SLIDE ' + (i < 10 ? '0' : '') + i + '</div>' +
+          '<div class="overview-thumb-title">' + titles[i - 1] + '</div>';
+        grid.appendChild(thumb);
+      }
+    }
+
+    // 全螢幕切換
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {});
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(err => {});
+        }
+      }
+    }
+
+    // ==========================================
+    // 數學公式高可靠渲染引擎 (KaTeX + 離線降級)
+    // ==========================================
+    let katexRendered = false;
+
+    function renderMathFormulas() {
+      if (katexRendered) return;
+      if (typeof renderMathInElement === 'function') {
+        try {
+          renderMathInElement(document.body, {
+            delimiters: [
+              { left: '$$', right: '$$', display: true },
+              { left: '\\[', right: '\\]', display: true },
+              { left: '$', right: '$', display: false },
+              { left: '\\(', right: '\\)', display: false }
+            ],
+            ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            throwOnError: false
+          });
+          katexRendered = true;
+          console.log('[MathEngine] KaTeX rendered successfully with $ delimiters.');
+        } catch (e) {
+          console.warn('[MathEngine] KaTeX render error:', e);
+          fallbackRenderMath();
+        }
+      } else {
+        setTimeout(renderMathFormulas, 120);
+      }
+    }
+
+    // 離線/CDN加載失敗時的備用優雅降級渲染器
+    function fallbackRenderMath() {
+      if (katexRendered) return;
+      console.log('[MathEngine] Executing pure HTML math fallback...');
+      
+      const mathMaps = [
+        {
+          re: /\$\$\s*\\frac\{\\partial \\mathbf\{h\}\}\{\\partial t\}\s*=\s*-\\(\s*\\mathbf\{v\}\s*\\cdot\s*\\nabla\s*\\)\\mathbf\{h\}\s*\+\s*D\s*\\nabla\^2\s*\\mathbf\{h\}\s*\$\$/g,
+          sub: '<div class="math-block">∂<strong>h</strong> / ∂t = -(<strong>v</strong> · ∇)<strong>h</strong> + D ∇²<strong>h</strong></div>'
+        },
+        {
+          re: /\$\$\s*d\\mathbf\{z\}_t\s*=\s*f_\\theta\(\\mathbf\{z\}_t,\s*t\)dt\s*\+\s*g_\\theta\(\\mathbf\{z\}_t,\s*t\)d\\mathbf\{W\}_t\s*\$\$/g,
+          sub: '<div class="math-block">d<strong>z</strong><sub>t</sub> = f<sub>θ</sub>(<strong>z</strong><sub>t</sub>, t)dt + g<sub>θ</sub>(<strong>z</strong><sub>t</sub>, t)d<strong>W</strong><sub>t</sub></div>'
+        },
+        { re: /\$T\$/g, sub: '<em style="font-family: serif; font-size: 1.05em; font-weight: 600;">T</em>' },
+        { re: /\$H\$/g, sub: '<em style="font-family: serif; font-size: 1.05em; font-weight: 600;">H</em>' },
+        { re: /\$D\$/g, sub: '<em style="font-family: serif; font-size: 1.05em; font-weight: 600;">D</em>' },
+        { re: /\$\\mathbf\{v\}\$/g, sub: '<strong>v</strong>' },
+        { re: /\$\\mathbf\{y\}\$/g, sub: '<strong>y</strong>' },
+        { re: /\$\\mathbf\{X\}_\{t-T\+1:t\}\$/g, sub: '<strong>X</strong><sub>t-T+1:t</sub>' },
+        { re: /\$\\hat\{\\mathbf\{X\}\}_\{t\+1:t\+H\}\$/g, sub: '<strong>X̂</strong><sub>t+1:t+H</sub>' },
+        { re: /\$\\mathbf\{X\}\s*\\in\s*\\mathbb\{R\}\^\{T\s*\\times\s*H\s*\\times\s*W\s*\\times\s*C\}\$/g, sub: '<strong>X</strong> ∈ ℝ<sup>T×H×W×C</sup>' },
+        { re: /\$\\mathbf\{Z\}\s*\\in\s*\\mathcal\{V\}\^\{t'\s*\\times\s*h\s*\\times\s*w\}\$/g, sub: "<strong>Z</strong> ∈ <em>V</em><sup>t'×h×w</sup>" },
+        { re: /\$f_\\theta\$/g, sub: '<em style="font-family: serif;">f</em><sub>θ</sub>' },
+        { re: /\$g_\\theta d\\mathbf\{W\}_t\$/g, sub: '<em style="font-family: serif;">g</em><sub>θ</sub> d<strong>W</strong><sub>t</sub>' },
+        { re: /\$\\mathbf\{M\}_\{sun\}\$/g, sub: '<strong>M</strong><sub>sun</sub>' }
+      ];
+
+      const cards = document.querySelectorAll('.card, .card-desc, .callout-strip');
+      cards.forEach(card => {
+        let html = card.innerHTML;
+        mathMaps.forEach(m => {
+          html = html.replace(m.re, m.sub);
+        });
+        card.innerHTML = html;
+      });
+      katexRendered = true;
+    }
+
+    // 若 1.8 秒後仍未渲染，自動啟動備用渲染器
+    setTimeout(() => {
+      if (!katexRendered) {
+        fallbackRenderMath();
+      }
+    }, 1800);
+
+    document.addEventListener('DOMContentLoaded', renderMathFormulas);
+    window.addEventListener('load', renderMathFormulas);
+  </script>
+</body>
+</html>

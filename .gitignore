@@ -1,0 +1,19 @@
+# Scratch & temporary development scripts
+scratch/
+*.tmp
+debug_*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Large raw source PDFs (exceeds GitHub 25MB browser limit)
+sources/*.pdf
